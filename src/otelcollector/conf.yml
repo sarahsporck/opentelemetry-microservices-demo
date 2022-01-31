@@ -11,6 +11,8 @@ exporters:
       insecure: true
   logging:
     loglevel: debug
+  prometheusremotewrite:
+    endpoint: "http://prometheus:9090/api/prom/push"
 
 service:
   pipelines:
@@ -18,3 +20,6 @@ service:
       receivers: [otlp]
       processors: []
       exporters: [logging,jaeger]
+    metrics:
+      receivers: [otlp]
+      exporters: [logging, prometheusremotewrite]

@@ -55,7 +55,7 @@ done < <(find "${SCRIPTDIR}/../src" -mindepth 1 -maxdepth 1 -type d -print0)
 
 log "Successfully built all images."
 
-log "Deploying Otel-Collector and Jaeger:"
+log "Deploying Otel-Collector, Jaeger and Prometheus:"
 
 docker run -d --rm --network="$networkName" --name jaeger \
   -e COLLECTOR_ZIPKIN_HOST_PORT=:9411 \
@@ -70,10 +70,15 @@ docker run -d --rm --network="$networkName" --name jaeger \
   -p 9411:9411 \
   jaegertracing/all-in-one:1.30 || true
 
+docker run -d --rm --network="$networkName" \
+     --name prometheus \
+     -p 9090:9090 \
+     "prometheus:$TAG" || true
+
 containername="$otelCollectorName"
 docker run -d --rm --network="$networkName" \
      --name "$otelCollectorName" \
-     "$otelCollectorName:$TAG" >&2 || true
+     "$otelCollectorName:$TAG" || true
 
 
 log "Deploying Online Boutique:"
@@ -102,6 +107,7 @@ run "-p 5050 -e PORT=5050 \
 
 containername=currencyservice
 run "-p 7000 -e PORT=7000 \
+     -e OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=$otelCollector \
      " "$containername"
 
 containername=emailservice
