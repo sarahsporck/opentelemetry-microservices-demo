@@ -27,6 +27,24 @@ const PORT = process.env.PORT;
 const shopProto = _loadProto(MAIN_PROTO_PATH).hipstershop;
 const healthProto = _loadProto(HEALTH_PROTO_PATH).grpc.health.v1;
 
+const { MeterProvider }  = require('@opentelemetry/sdk-metrics-base');
+
+const meter = new MeterProvider({
+  interval: 1000,
+}).getMeter('example-prometheus');
+
+const counter = meter.createCounter('metric_name', {
+  description: 'Example of a counter'
+});
+
+const upDownCounter = meter.createUpDownCounter('test_up_down_counter', {
+  description: 'Example of a UpDownCounter',
+});
+
+const histogram = meter.createHistogram('test_histogram', {
+  description: 'Example of a Histogram',
+});
+
 const logger = pino({
   name: 'currencyservice-server',
   messageKey: 'message',
@@ -86,6 +104,11 @@ function getSupportedCurrencies (call, callback) {
  */
 function convert (call, callback) {
   try {
+
+    counter.add(10, { pid: process.pid });
+    upDownCounter.add(Math.random() > 0.5 ? 1 : -1, { pid: process.pid });
+    histogram.record(Math.random(), { pid: process.pid });
+
     _getCurrencyData((data) => {
       const request = call.request;
 
