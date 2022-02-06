@@ -19,7 +19,7 @@ service:
     traces:
       receivers: [otlp]
       processors: []
-      exporters: [logging,jaeger]
+      exporters: [jaeger]
     metrics:
       receivers: [otlp]
       exporters: [logging, prometheus]
