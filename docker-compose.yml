@@ -1,0 +1,252 @@
+services:
+    
+    jaeger:
+        image: jaegertracing/all-in-one:latest
+        container_name: jaeger
+        mem_limit: 512M
+        networks:
+            - online-boutique
+        ports:
+            - 16686:16686
+            - 14268
+            - 14250
+
+    zipkin:
+        image: openzipkin/zipkin:latest
+        container_name: zipkin
+        mem_limit: 512M
+        networks:
+            - online-boutique
+        ports:
+            - 9411:9411
+
+    prometheus:
+        image: prom/prometheus:latest
+        container_name: prometheus
+        networks:
+            - online-boutique
+        volumes:
+            - ./prometheus.yaml:/etc/prometheus/prometheus.yml
+        ports:
+            - 9090:9090
+
+    otel_collector:
+        image: otelcollector:${TAG}
+        build: ./src/otelcollector
+        mem_limit: 512M
+        container_name: otelcollector
+        networks:
+            - online-boutique
+        depends_on:
+            - redis_cart
+            - zipkin
+
+    redis_cart:
+        image: redis:alpine
+        container_name: redis-cart
+        hostname: redis-cart
+        mem_limit: 512M
+        networks:
+            - online-boutique
+        ports:
+            - 6379
+        volumes:
+            - redis-data:/data
+
+    adservice:
+        image: adservice:${TAG}
+        build: ./src/adservice
+        hostname: adservice
+        mem_limit: 512M
+        ports:
+            - 9555
+        environment:
+            - PORT=9555
+            - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otelcollector:4317
+            - OTEL_RESOURCE_ATTRIBUTES=service.name=adservice,service.version=${TAG}
+        depends_on:
+            - otel_collector
+        networks:
+            - online-boutique
+
+    cartservice:
+        image: cartservice:${TAG}
+        build: ./src/cartservice/src
+        hostname: cartservice
+        mem_limit: 512M
+        ports:
+            - 7070
+        environment:
+            - REDIS_ADDR=redis-cart:6379
+            - OTEL_EXPORTER_OTLP_ENDPOINT=http://otelcollector:4317
+            - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otelcollector:4317
+            - OTEL_RESOURCE_ATTRIBUTES=service.name=cartservice,service.version=${TAG}
+        depends_on:
+            - otel_collector
+        networks:
+            - online-boutique
+
+    checkoutservice:
+        image: checkoutservice:${TAG}
+        build: ./src/checkoutservice
+        mem_limit: 512M
+        hostname: checkoutservice
+        ports:
+        - 5050
+        environment:
+            - PORT=5050
+            - PRODUCT_CATALOG_SERVICE_ADDR=productcatalogservice:3550
+            - SHIPPING_SERVICE_ADDR=shippingservice:50051
+            - PAYMENT_SERVICE_ADDR=paymentservice:50051
+            - EMAIL_SERVICE_ADDR=emailservice:8080
+            - CURRENCY_SERVICE_ADDR=currencyservice:7000
+            - CART_SERVICE_ADDR=cartservice:7070
+            - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otelcollector:4317
+            - OTEL_RESOURCE_ATTRIBUTES=service.name=checkoutservice,service.version=${TAG}
+        depends_on:
+            - otel_collector
+        networks:
+            - online-boutique
+
+    currencyservice:
+        image: currencyservice:${TAG}
+        build: ./src/currencyservice
+        mem_limit: 512M
+        hostname: currencyservice
+        ports:
+            - 7000
+        environment:
+            - PORT=7000
+            - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otelcollector:4317
+            - OTEL_RESOURCE_ATTRIBUTES=service.name=currencyservice,service.version=${TAG}
+        depends_on:
+            - otel_collector
+        networks:
+            - online-boutique
+
+    emailservice:
+        image: emailservice:${TAG}
+        build: ./src/emailservice
+        mem_limit: 512M
+        hostname: emailservice
+        ports:
+            - 8080
+        environment:
+            - PORT=8080
+            - OTEL_PYTHON_LOG_CORRELATION=true
+            - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otelcollector:4317
+            - OTEL_RESOURCE_ATTRIBUTES=service.name=emailservice,service.version=${TAG}
+        depends_on:
+            - otel_collector
+        networks:
+            - online-boutique
+    
+    frontend:
+        image: frontend:${TAG}
+        build: ./src/frontend
+        mem_limit: 512M
+        ports:
+            - "8080:8080"
+        environment:
+            - PROT=8080
+            - PRODUCT_CATALOG_SERVICE_ADDR=productcatalogservice:3550
+            - SHIPPING_SERVICE_ADDR=shippingservice:50051
+            - CURRENCY_SERVICE_ADDR=currencyservice:7000
+            - CART_SERVICE_ADDR=cartservice:7070
+            - RECOMMENDATION_SERVICE_ADDR=recommendationservice:8080
+            - CHECKOUT_SERVICE_ADDR=checkoutservice:5050
+            - AD_SERVICE_ADDR=adservice:9555
+            - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otelcollector:4317
+            - OTEL_RESOURCE_ATTRIBUTES=service.name=frontend,service.version=${TAG}
+        depends_on:
+            - otel_collector
+        networks:
+            - online-boutique
+
+    paymentservice:
+        image: paymentservice:${TAG}
+        build: ./src/paymentservice
+        mem_limit: 512M
+        hostname: paymentservice
+        ports:
+            - 50051
+        environment:
+            - PORT=50051
+            - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otelcollector:4317
+            - OTEL_RESOURCE_ATTRIBUTES=service.name=paymentservice,service.version=${TAG}
+        depends_on:
+            - otel_collector
+        networks:
+            - online-boutique
+
+    productcatalogservice:
+        image: productcatalogservice:${TAG}
+        build: ./src/productcatalogservice
+        mem_limit: 512M
+        hostname: productcatalogservice
+        ports:
+            - 3550
+        environment:
+            - PORT=3550
+            - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otelcollector:4317
+            - OTEL_RESOURCE_ATTRIBUTES=service.name=productcatalogservice,service.version=${TAG}
+        depends_on:
+            - otel_collector
+        networks:
+            - online-boutique
+
+    recommendationservice:
+        image: recommendationservice:${TAG}
+        build: ./src/recommendationservice
+        mem_limit: 512M
+        hostname: recommendationservice
+        ports:
+            - 8080
+        environment:
+            - PORT=8080
+            - OTEL_PYTHON_LOG_CORRELATION=true
+            - PRODUCT_CATALOG_SERVICE_ADDR=productcatalogservice:3550
+            - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otelcollector:4317
+            - OTEL_RESOURCE_ATTRIBUTES=service.name=recommendationservice,service.version=${TAG}
+        depends_on:
+            - otel_collector
+        networks:
+            - online-boutique
+
+    shippingservice:
+        image: shippingservice:${TAG}
+        build: ./src/shippingservice
+        mem_limit: 512M
+        hostname: shippingservice
+        ports:
+            - 50051
+        environment:
+            - PORT=50051
+            - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otelcollector:4317
+            - OTEL_RESOURCE_ATTRIBUTES=service.name=shippingservice,service.version=${TAG}
+        depends_on:
+            - otel_collector
+        networks:
+            - online-boutique
+
+    loadgenerator:
+        image: loadgenerator:${TAG}
+        build: ./src/loadgenerator
+        mem_limit: 512M
+        logging: 
+            driver: none
+        environment:
+            - FRONTEND_ADDR=frontend:8080
+            - USERS=10
+            - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otelcollector:4317
+            - OTEL_RESOURCE_ATTRIBUTES=service.name=loadgenerator,service.version=${TAG}
+        depends_on:
+            - otel_collector
+        networks:
+            - online-boutique
+
+networks:
+    online-boutique:
+
+volumes:
+    redis-data:
