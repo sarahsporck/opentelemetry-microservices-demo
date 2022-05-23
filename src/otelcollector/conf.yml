@@ -2,31 +2,39 @@ receivers:
   otlp:
     protocols:
       grpc:
-      http:
+
+  otlp/spanmetrics:
+    protocols:
+      grpc:
+        endpoint: "localhost:12345"
+
+processors:
+  spanmetrics: 
+    metrics_exporter: prometheus 
 
 exporters:
   jaeger:
     endpoint: "jaeger:14250"
     tls:
       insecure: true
+
   zipkin:
     endpoint: "http://zipkin:9411/api/v2/spans"
     format: proto
-  logging:
-    loglevel: debug
+
   prometheus:
     endpoint: "0.0.0.0:8889"
-    const_labels:
-      label1: value1
+
+  logging:
+    logLevel: debug
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: []
+      processors: [spanmetrics]
       exporters: [logging,jaeger,zipkin]
     metrics:
-      receivers: [otlp]
-      processors: []
+      receivers: [otlp/spanmetrics]
       exporters: [prometheus]
       

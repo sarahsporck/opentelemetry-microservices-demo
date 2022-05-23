@@ -1,5 +1,4 @@
 services:
-    
     jaeger:
         image: jaegertracing/all-in-one:latest
         container_name: jaeger
@@ -10,15 +9,6 @@ services:
             - 16686:16686
             - 14268
             - 14250
-
-    zipkin:
-        image: openzipkin/zipkin:latest
-        container_name: zipkin
-        mem_limit: 512M
-        networks:
-            - online-boutique
-        ports:
-            - 9411:9411
 
     prometheus:
         image: prom/prometheus:latest
@@ -52,6 +42,19 @@ services:
             - 6379
         volumes:
             - redis-data:/data
+
+    express:
+      image: express:${TAG}
+      build: ./src/express-consumer
+      container_name: express
+      ports:
+        - "3000:3000"
+      environment:
+          - PORT=3000
+      depends_on:
+          - otel_collector
+      networks:
+          - online-boutique
 
     adservice:
         image: adservice:${TAG}
